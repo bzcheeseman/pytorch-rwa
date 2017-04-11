@@ -30,7 +30,7 @@ class AddTask(Dataset):
 
         # Training data - copied from the original rwa repo
         #
-        if not os.path.isfile(path + '/data/xs_train.npy'):
+        if not os.path.isfile(path + '/data/xs_train_{}.npy'.format(max_length)):
             values = np.random.rand(num_train, max_length, 1)
             mask = np.zeros((num_train, max_length, 1))
             for i in range(num_train):
@@ -41,13 +41,13 @@ class AddTask(Dataset):
                 mask[i, j1, 0] = 1.0
                 mask[i, j2, 0] = 1.0
             self.xs_train = np.concatenate((values, mask), 2)
-            np.save(path + '/data/xs_train.npy', self.xs_train)
+            np.save(path + '/data/xs_train_{}.npy'.format(max_length), self.xs_train)
         else:
-            self.xs_train = np.load(path + '/data/xs_train.npy')
+            self.xs_train = np.load(path + '/data/xs_train_{}.npy'.format(max_length))
         self.ys_train = np.sum(self.xs_train[:, :, 0] * self.xs_train[:, :, 1], 1)
         # Testing data - copied from the original rwa repo
         #
-        if not os.path.isfile(path + '/data/xs_test.npy'):
+        if not os.path.isfile(path + '/data/xs_test_{}.npy'.format(max_length)):
             values = np.random.rand(num_test, max_length, 1)
             mask = np.zeros((num_test, max_length, 1))
             for i in range(num_test):
@@ -58,9 +58,9 @@ class AddTask(Dataset):
                 mask[i, j1, 0] = 1.0
                 mask[i, j2, 0] = 1.0
             self.xs_test = np.concatenate((values, mask), 2)
-            np.save(path + '/data/xs_test.npy', self.xs_test)
+            np.save(path + '/data/xs_test_{}.npy'.format(max_length), self.xs_test)
         else:
-            self.xs_test = np.load(path + '/data/xs_test.npy')
+            self.xs_test = np.load(path + '/data/xs_test_{}.npy'.format(max_length))
         self.ys_test = np.sum(self.xs_test[:, :, 0] * self.xs_test[:, :, 1], 1)
 
     def __getitem__(self, item):

@@ -96,5 +96,7 @@ ENV/
 .ropeproject
 
 .idea/
-models/
-plots/
+models/*
+plots/*
+data/*
+training/run*
