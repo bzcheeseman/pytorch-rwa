@@ -6,5 +6,6 @@ So far I have implemented the forward pass - haven't actually checked to see if 
 the way we expect it to based on the paper.
 
 TODO:
-- [ ] Train the network on tasks in [the original repo](https://github.com/jostmey/rwa)
+- [ ] Train the network on all tasks in [the original repo](https://github.com/jostmey/rwa)
+    - [x] Implemented AddTask
 - [ ] Use this in projects!
