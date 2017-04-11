@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as Funct
+import numpy as np
 
 
 class RWA(nn.Module):
@@ -28,10 +29,22 @@ class RWA(nn.Module):
 
         self.s0 = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0))
 
+        init_factor = np.sqrt(6.0 / (num_features + 2.0 * num_cells))
+
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
+        self.g.weight.data.uniform_(-init_factor, init_factor)
+        self.g.bias.data.zero_()
+
         self.u = nn.Linear(self.num_features, self.num_cells)
+        self.u.weight.data.uniform_(-init_factor, init_factor)
+        self.u.bias.data.zero_()
+
         self.a = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
+        self.a.weight.data.uniform_(-init_factor, init_factor)
+
         self.o = nn.Linear(self.num_cells, self.num_classes)
+        self.o.weight.data.uniform_(-init_factor, init_factor)
+        self.o.bias.data.zero_()
 
     def init_internal(self, batch_size):
         n = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
@@ -44,7 +57,7 @@ class RWA(nn.Module):
 
     def forward(self, x, n, d, h, a_max):  # x has shape (batch x steps x num_features)
 
-        outs = []
+        # outs = []
 
         for x_t in torch.unbind(x, 1):
             xh_join = torch.cat([x_t, h], 1)
@@ -70,14 +83,15 @@ class RWA(nn.Module):
 
             h = self.activation(n_t / d_t)
 
-            outs.append(self.o(h))
+            # outs.append(self.o(h))
 
-        outs = torch.stack(outs, dim=1)
+        # outs = torch.stack(outs, dim=1)
+        outs = self.o(h)
         return outs, n_t, d_t, h, a_newmax
 
 
 if __name__ == "__main__":
-    rwa = RWA(10, 250, 2)
+    rwa = RWA(10, 250, 1)
     n, d, h, a_max = rwa.init_internal(4)
     # making series predictions - feed inputs in one by one
     x = Variable(torch.rand(4, 30, 10))  # batch_size x sequence x num_features

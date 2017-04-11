@@ -7,4 +7,4 @@
 
 __all__ = ['tasks']
 
-from .tasks import CopyTask
+from .tasks import AddTask
