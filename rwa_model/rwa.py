@@ -34,16 +34,27 @@ class RWA(nn.Module):
         self.o = nn.Linear(self.num_cells, self.num_classes)
 
     def init_internal(self, batch_size):
-        n = Variable(torch.zeros(batch_size, self.num_cells))
-        d = Variable(torch.zeros(batch_size, self.num_cells))
-        h = Variable(torch.zeros(batch_size, self.num_cells))
+        n = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
+        d = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
+        h = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
         h = h + self.activation(self.s0.repeat(batch_size, 1))
-        a_max = Variable(torch.ones(batch_size, self.num_cells) * -1e38)  # start with very negative number
+        a_max = Variable(torch.ones(batch_size, self.num_cells) * -1e38, requires_grad=True)
+        # start with very negative number
         return n, d, h, a_max
 
     def forward(self, x, n, d, h, a_max):  # x has shape (batch x steps x num_features)
+
+        outs = []
+
         for x_t in torch.unbind(x, 1):
             xh_join = torch.cat([x_t, h], 1)
+
+            x_t = x_t.contiguous()
+            x_t = x_t.view(x_t.size(0), -1)
+
+            xh_join = xh_join.contiguous()
+            xh_join = xh_join.view(xh_join.size(0), -1)
+
             u_t = self.u(x_t)
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
@@ -59,15 +70,17 @@ class RWA(nn.Module):
 
             h = self.activation(n_t / d_t)
 
-        out = self.o(h)
-        return out
+            outs.append(self.o(h))
 
+        outs = torch.stack(outs, dim=1)
+        return outs, n_t, d_t, h, a_newmax
 
 
 if __name__ == "__main__":
     rwa = RWA(10, 250, 2)
     n, d, h, a_max = rwa.init_internal(4)
-    x = Variable(torch.rand(4, 30, 10))
+    # making series predictions - feed inputs in one by one
+    x = Variable(torch.rand(4, 30, 10))  # batch_size x sequence x num_features
     rwa(x, n, d, h, a_max)
 
 
