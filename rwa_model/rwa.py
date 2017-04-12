@@ -35,8 +35,6 @@ class RWA(nn.Module):
         self.num_classes = num_classes
         self.activation = activation
 
-        self.s0 = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0))
-
         init_factor = np.sqrt(6.0 / (num_features + 2.0 * num_cells))
 
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
@@ -54,14 +52,14 @@ class RWA(nn.Module):
         self.o.weight.data.uniform_(-init_factor, init_factor)
         self.o.bias.data.zero_()
 
-    def init_internal(self, batch_size):
-        n = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
-        d = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
-        h = Variable(torch.zeros(batch_size, self.num_cells), requires_grad=True)
-        h = h + self.activation(self.s0.repeat(batch_size, 1))
-        a_max = Variable(torch.ones(batch_size, self.num_cells) * -1e38, requires_grad=True)
+    def init_sndha(self, batch_size):
+        s = Variable(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0), requires_grad=True)
+        n = Variable(torch.zeros(batch_size, self.num_cells))
+        d = Variable(torch.zeros(batch_size, self.num_cells))
+        h = Variable(torch.zeros(batch_size, self.num_cells))
+        a_max = Variable(torch.ones(batch_size, self.num_cells) * -1e38)
         # start with very negative number
-        return n, d, h, a_max
+        return s, n, d, h, a_max
 
     def _fwd_stepwise(self, x, n, d, h, a_max):
         outs = []
@@ -123,18 +121,13 @@ class RWA(nn.Module):
         outs = self.o(h)
         return outs, n_t, d_t, h, a_newmax
 
-    def forward(self, x, n, d, h, a_max):  # x has shape (batch x steps x num_features)
+    def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
+
+        h = h + self.activation(s.repeat(x.size(0), 1))
 
         outs, n_t, d_t, h, a_newmax = self.fwd_fn(x, n, d, h, a_max)
-        return outs, n_t, d_t, h, a_newmax
 
-
-if __name__ == "__main__":
-    rwa = RWA(10, 250, 1)
-    n, d, h, a_max = rwa.init_internal(4)
-    # making series predictions - feed inputs in one by one
-    x = Variable(torch.rand(4, 30, 10))  # batch_size x sequence x num_features
-    print(rwa(x, n, d, h, a_max))
+        return outs, s, n_t, d_t, h, a_newmax
 
 
 
