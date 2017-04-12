@@ -28,7 +28,7 @@ class AddTask(Dataset):
 
         os.makedirs(path + '/data', exist_ok=True)
 
-        # Training data - copied from the original rwa repo
+        # Training data - copied from the original rwa repo by Jared Ostmeyer
         #
         if not os.path.isfile(path + '/data/xs_train_{}.npy'.format(max_length)):
             values = np.random.rand(num_train, max_length, 1)
@@ -45,7 +45,8 @@ class AddTask(Dataset):
         else:
             self.xs_train = np.load(path + '/data/xs_train_{}.npy'.format(max_length))
         self.ys_train = np.sum(self.xs_train[:, :, 0] * self.xs_train[:, :, 1], 1)
-        # Testing data - copied from the original rwa repo
+
+        # Testing data - copied from the original rwa repo by Ostmeyer
         #
         if not os.path.isfile(path + '/data/xs_test_{}.npy'.format(max_length)):
             values = np.random.rand(num_test, max_length, 1)

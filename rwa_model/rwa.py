@@ -88,7 +88,7 @@ class RWA(nn.Module):
             n_t = n * exp_diff + z_t * exp_scaled
             d_t = d * exp_diff + exp_scaled
 
-            h_t = self.activation(n_t / d_t)
+            h_t = self.activation((n_t / d_t))
 
             outs.append(self.o(h_t))
 
@@ -120,14 +120,14 @@ class RWA(nn.Module):
             n_t = n * exp_diff + z_t * exp_scaled
             d_t = d * exp_diff + exp_scaled
 
-            h_t = self.activation(n_t / d_t)
+            h_t = self.activation((n_t / d_t))
 
         outs = self.o(h_t)
         return outs, n_t, d_t, h_t, a_newmax
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
 
-        h_t = h + self.activation(s.repeat(x.size(0), 1))  # do something about this...
+        h_t = h + self.activation(s.repeat(x.size(0), 1))
 
         outs, n_t, d_t, h_t, a_newmax = self.fwd_fn(x, n, d, h_t, a_max)
 
