@@ -35,6 +35,7 @@ class RWA(nn.Module):
         self.num_cells = num_cells
         self.num_classes = num_classes
         self.activation = activation
+        self.init = init
 
         init_factor = np.sqrt((6.0 * init) / (num_features + 2.0 * num_cells))
 
@@ -54,11 +55,11 @@ class RWA(nn.Module):
         self.o.bias.data.zero_()
 
     def init_sndha(self, batch_size):
-        s = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0), requires_grad=True)
+        s = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, self.init), requires_grad=True)
         n = Variable(torch.zeros(batch_size, self.num_cells))
         d = Variable(torch.zeros(batch_size, self.num_cells))
         h = Variable(torch.zeros(batch_size, self.num_cells))
-        a_max = Variable(torch.ones(batch_size, self.num_cells) * -1e38)
+        a_max = Variable(torch.FloatTensor(batch_size, self.num_cells).uniform_(-1E38))
         # start with very negative number
         return s, n, d, h, a_max
 
@@ -66,64 +67,74 @@ class RWA(nn.Module):
         outs = []
 
         h_t = h
-        for x_t in torch.unbind(x, 1):
-            xh_join = torch.cat([x_t, h_t], 1)
+        a_max_t = a_max
+        n_t = n
+        d_t = d
+        for x_t in torch.unbind(x, 1):  # Unbind the tensor along the time/steps dimension
+            xh_join = torch.cat([x_t, h_t], 1)  # concat the time step input with the time step h
 
             x_t = x_t.contiguous()
-            x_t = x_t.view(x_t.size(0), -1)
+            x_t = x_t.view(x_t.size(0), -1)  # flatten time step input
 
             xh_join = xh_join.contiguous()
-            xh_join = xh_join.view(xh_join.size(0), -1)
+            xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
+            # Gates, u, g, a
             u_t = self.u(x_t)
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            z_t = u_t * Funct.tanh(g_t)
+            z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_newmax = torch.max(a_max, a_t)
-            exp_diff = torch.exp(a_max - a_newmax)
+            a_newmax = torch.max(a_max_t, a_t)  # update a_max
+            exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n * exp_diff + z_t * exp_scaled
-            d_t = d * exp_diff + exp_scaled
+            n_t = n_t * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * exp_diff + exp_scaled  # update denominator
 
-            h_t = self.activation((n_t / d_t))
+            h_t = self.activation((n_t / d_t))  # update h
+            a_max_t = a_newmax  # update a_max
 
             outs.append(self.o(h_t))
 
         outs = torch.stack(outs, dim=1)
-        return outs, n_t, d_t, h_t, a_newmax
+        return outs, n_t, d_t, h_t, a_max_t
 
     def _fwd_cumulative(self, x, n, d, h, a_max):
 
         h_t = h
-        for x_t in torch.unbind(x, 1):
-            xh_join = torch.cat([x_t, h_t], 1)
+        a_max_t = a_max
+        n_t = n
+        d_t = d
+        for x_t in torch.unbind(x, 1):  # Unbind the tensor along the time/steps dimension
+            xh_join = torch.cat([x_t, h_t], 1)  # concat the time step input with the time step h
 
             x_t = x_t.contiguous()
-            x_t = x_t.view(x_t.size(0), -1)
+            x_t = x_t.view(x_t.size(0), -1)  # flatten time step input
 
             xh_join = xh_join.contiguous()
-            xh_join = xh_join.view(xh_join.size(0), -1)
+            xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
+            # Gates, u, g, a
             u_t = self.u(x_t)
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            z_t = u_t * Funct.tanh(g_t)
+            z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_newmax = torch.max(a_max, a_t)
-            exp_diff = torch.exp(a_max - a_newmax)
+            a_newmax = torch.max(a_max_t, a_t)  # update a_max
+            exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n * exp_diff + z_t * exp_scaled
-            d_t = d * exp_diff + exp_scaled
+            n_t = n_t * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * exp_diff + exp_scaled  # update denominator
 
-            h_t = self.activation((n_t / d_t))
+            h_t = self.activation((n_t / d_t))  # update h
+            a_max_t = a_newmax  # update a_max
 
         outs = self.o(h_t)
-        return outs, n_t, d_t, h_t, a_newmax
+        return outs, n_t, d_t, h_t, a_max_t
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
 

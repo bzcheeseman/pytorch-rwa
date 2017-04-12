@@ -100,3 +100,4 @@ models/*
 plots/*
 data/*
 training/*
+ref/
