@@ -41,26 +41,29 @@ class RWA(nn.Module):
 
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
         self.g.weight.data.uniform_(-init_factor, init_factor)
-        self.g.bias.data.zero_()
+        # self.g.bias.data.zero_()
+        self.g_drop = nn.Dropout(p=0.2)
 
         self.u = nn.Linear(self.num_features, self.num_cells)
         self.u.weight.data.uniform_(-init_factor, init_factor)
-        self.u.bias.data.zero_()
+        # self.u.bias.data.zero_()
+        self.u_drop = nn.Dropout(p=0.2)
 
         self.a = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
         self.a.weight.data.uniform_(-init_factor, init_factor)
+        self.a_drop = nn.Dropout(p=0.2)
 
         self.o = nn.Linear(self.num_cells, self.num_classes)
         self.o.weight.data.uniform_(-init_factor, init_factor)
-        self.o.bias.data.zero_()
+        # self.o.bias.data.zero_()
+        self.o_drop = nn.Dropout(p=0.05)
 
     def init_sndha(self, batch_size):
         s = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, self.init), requires_grad=True)
         n = Variable(torch.zeros(batch_size, self.num_cells))
         d = Variable(torch.zeros(batch_size, self.num_cells))
         h = Variable(torch.zeros(batch_size, self.num_cells))
-        a_max = Variable(torch.FloatTensor(batch_size, self.num_cells).uniform_(-1E38))
-        # start with very negative number
+        a_max = Variable(torch.FloatTensor(batch_size, self.num_cells).fill_(-1e38))
         return s, n, d, h, a_max
 
     def _fwd_stepwise(self, x, n, d, h, a_max):
@@ -80,9 +83,14 @@ class RWA(nn.Module):
             xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
             # Gates, u, g, a
-            u_t = self.u(x_t)
-            g_t = self.g(xh_join)
-            a_t = self.a(xh_join)
+            u_t = self.u_drop(x_t)
+            u_t = self.u(u_t)
+
+            g_t = self.g_drop(xh_join)
+            g_t = self.g(g_t)
+
+            a_t = self.a_drop(xh_join)
+            a_t = self.a(a_t)
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
@@ -96,7 +104,9 @@ class RWA(nn.Module):
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
 
-            outs.append(self.o(h_t))
+            o_t = self.o_drop(h_t)
+            o_t = self.o(o_t)
+            outs.append(o_t)
 
         outs = torch.stack(outs, dim=1)
         return outs, n_t, d_t, h_t, a_max_t
@@ -107,7 +117,7 @@ class RWA(nn.Module):
         a_max_t = a_max
         n_t = n
         d_t = d
-        for x_t in torch.unbind(x, 1):  # Unbind the tensor along the time/steps dimension
+        for x_t in torch.unbind(x, 1):  # make list of (batch x features) that is (steps) long
             xh_join = torch.cat([x_t, h_t], 1)  # concat the time step input with the time step h
 
             x_t = x_t.contiguous()
@@ -117,9 +127,14 @@ class RWA(nn.Module):
             xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
             # Gates, u, g, a
-            u_t = self.u(x_t)
-            g_t = self.g(xh_join)
-            a_t = self.a(xh_join)
+            u_t = self.u_drop(x_t)
+            u_t = self.u(u_t)
+
+            g_t = self.g_drop(xh_join)
+            g_t = self.g(g_t)
+
+            a_t = self.a_drop(xh_join)
+            a_t = self.a(a_t)
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
@@ -133,7 +148,8 @@ class RWA(nn.Module):
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
 
-        outs = self.o(h_t)
+        outs = self.o_drop(h_t)
+        outs = self.o(outs)
         return outs, n_t, d_t, h_t, a_max_t
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
