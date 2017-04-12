@@ -37,24 +37,26 @@ class RWA(nn.Module):
         self.activation = activation
         self.init = init
 
-        init_factor = np.sqrt((6.0 * init) / (num_features + 2.0 * num_cells))
+        ga_init_factor = np.sqrt((6.0 * init) / (num_features + 2.0 * num_cells))
+        u_init_factor = np.sqrt((6.0 * init) / (num_features + num_cells))
+        o_init_factor = np.sqrt((6.0 * init) / (num_cells + num_classes))
 
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
-        self.g.weight.data.uniform_(-init_factor, init_factor)
+        self.g.weight.data.uniform_(-ga_init_factor, ga_init_factor)
         self.g.bias.data.zero_()
         # self.g_drop = nn.Dropout(p=0.2)
 
         self.u = nn.Linear(self.num_features, self.num_cells)
-        self.u.weight.data.uniform_(-init_factor, init_factor)
+        self.u.weight.data.uniform_(-u_init_factor, u_init_factor)
         self.u.bias.data.zero_()
         # self.u_drop = nn.Dropout(p=0.2)
 
         self.a = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
-        self.a.weight.data.uniform_(-init_factor, init_factor)
+        self.a.weight.data.uniform_(-ga_init_factor, ga_init_factor)
         # self.a_drop = nn.Dropout(p=0.2)
 
         self.o = nn.Linear(self.num_cells, self.num_classes)
-        self.o.weight.data.uniform_(-init_factor, init_factor)
+        self.o.weight.data.uniform_(-o_init_factor, o_init_factor)
         self.o.bias.data.zero_()
         # self.o_drop = nn.Dropout(p=0.05)
 
@@ -84,16 +86,13 @@ class RWA(nn.Module):
 
             # Gates, u, g, a
             # u_t = self.u_drop(x_t)
-            u_t = x_t
-            u_t = self.u(u_t)
+            u_t = self.u(x_t)
 
             # g_t = self.g_drop(xh_join)
-            g_t = xh_join
-            g_t = self.g(g_t)
+            g_t = self.g(xh_join)
 
             # a_t = self.a_drop(xh_join)
-            a_t = xh_join
-            a_t = self.a(a_t)
+            a_t = self.a(xh_join)
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
@@ -108,8 +107,7 @@ class RWA(nn.Module):
             a_max_t = a_newmax  # update a_max
 
             # o_t = self.o_drop(h_t)
-            o_t = h_t
-            o_t = self.o(o_t)
+            o_t = self.o(h_t)
             outs.append(o_t)
 
         outs = torch.stack(outs, dim=1)
@@ -132,16 +130,13 @@ class RWA(nn.Module):
 
             # Gates, u, g, a
             # u_t = self.u_drop(x_t)
-            u_t = x_t
-            u_t = self.u(u_t)
+            u_t = self.u(x_t)
 
             # g_t = self.g_drop(xh_join)
-            g_t = xh_join
-            g_t = self.g(g_t)
+            g_t = self.g(xh_join)
 
             # a_t = self.a_drop(xh_join)
-            a_t = xh_join
-            a_t = self.a(a_t)
+            a_t = self.a(xh_join)
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
@@ -156,8 +151,7 @@ class RWA(nn.Module):
             a_max_t = a_newmax  # update a_max
 
         # outs = self.o_drop(h_t)
-        outs = h_t
-        outs = self.o(outs)
+        outs = self.o(h_t)
         return outs, n_t, d_t, h_t, a_max_t
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
