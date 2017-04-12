@@ -18,6 +18,7 @@ class RWA(nn.Module):
                  num_features,
                  num_cells,
                  num_classes,
+                 init=1.0,
                  activation=Funct.tanh,
                  fwd_type="stepwise"):
 
@@ -35,7 +36,7 @@ class RWA(nn.Module):
         self.num_classes = num_classes
         self.activation = activation
 
-        init_factor = np.sqrt(6.0 / (num_features + 2.0 * num_cells))
+        init_factor = np.sqrt((6.0 * init) / (num_features + 2.0 * num_cells))
 
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
         self.g.weight.data.uniform_(-init_factor, init_factor)
@@ -53,7 +54,7 @@ class RWA(nn.Module):
         self.o.bias.data.zero_()
 
     def init_sndha(self, batch_size):
-        s = Variable(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0), requires_grad=True)
+        s = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, 1.0), requires_grad=True)
         n = Variable(torch.zeros(batch_size, self.num_cells))
         d = Variable(torch.zeros(batch_size, self.num_cells))
         h = Variable(torch.zeros(batch_size, self.num_cells))
@@ -64,8 +65,9 @@ class RWA(nn.Module):
     def _fwd_stepwise(self, x, n, d, h, a_max):
         outs = []
 
+        h_t = h
         for x_t in torch.unbind(x, 1):
-            xh_join = torch.cat([x_t, h], 1)
+            xh_join = torch.cat([x_t, h_t], 1)
 
             x_t = x_t.contiguous()
             x_t = x_t.view(x_t.size(0), -1)
@@ -86,16 +88,18 @@ class RWA(nn.Module):
             n_t = n * exp_diff + z_t * exp_scaled
             d_t = d * exp_diff + exp_scaled
 
-            h = self.activation(n_t / d_t)
+            h_t = self.activation(n_t / d_t)
 
-            outs.append(self.o(h))
+            outs.append(self.o(h_t))
 
         outs = torch.stack(outs, dim=1)
-        return outs, n_t, d_t, h, a_newmax
+        return outs, n_t, d_t, h_t, a_newmax
 
     def _fwd_cumulative(self, x, n, d, h, a_max):
+
+        h_t = h
         for x_t in torch.unbind(x, 1):
-            xh_join = torch.cat([x_t, h], 1)
+            xh_join = torch.cat([x_t, h_t], 1)
 
             x_t = x_t.contiguous()
             x_t = x_t.view(x_t.size(0), -1)
@@ -116,18 +120,18 @@ class RWA(nn.Module):
             n_t = n * exp_diff + z_t * exp_scaled
             d_t = d * exp_diff + exp_scaled
 
-            h = self.activation(n_t / d_t)
+            h_t = self.activation(n_t / d_t)
 
-        outs = self.o(h)
-        return outs, n_t, d_t, h, a_newmax
+        outs = self.o(h_t)
+        return outs, n_t, d_t, h_t, a_newmax
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
 
-        h = h + self.activation(s.repeat(x.size(0), 1))
+        h_t = h + self.activation(s.repeat(x.size(0), 1))  # do something about this...
 
-        outs, n_t, d_t, h, a_newmax = self.fwd_fn(x, n, d, h, a_max)
+        outs, n_t, d_t, h_t, a_newmax = self.fwd_fn(x, n, d, h_t, a_max)
 
-        return outs, s, n_t, d_t, h, a_newmax
+        return outs, s, n_t, d_t, h_t, a_newmax
 
 
 

@@ -99,4 +99,4 @@ ENV/
 models/*
 plots/*
 data/*
-training/run*
+training/*
