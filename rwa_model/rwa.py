@@ -44,21 +44,20 @@ class RWA(nn.Module):
         self.g = nn.Linear(self.num_features + self.num_cells, self.num_cells)
         self.g.weight.data.uniform_(-ga_init_factor, ga_init_factor)
         self.g.bias.data.zero_()
-        # self.g_drop = nn.Dropout(p=0.2)
 
         self.u = nn.Linear(self.num_features, self.num_cells)
         self.u.weight.data.uniform_(-u_init_factor, u_init_factor)
         self.u.bias.data.zero_()
-        # self.u_drop = nn.Dropout(p=0.2)
 
         self.a = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
         self.a.weight.data.uniform_(-ga_init_factor, ga_init_factor)
-        # self.a_drop = nn.Dropout(p=0.2)
 
         self.o = nn.Linear(self.num_cells, self.num_classes)
         self.o.weight.data.uniform_(-o_init_factor, o_init_factor)
         self.o.bias.data.zero_()
-        # self.o_drop = nn.Dropout(p=0.05)
+
+        self.decay = nn.Linear(self.num_features, self.num_cells, bias=False)
+        self.decay.weight.data.normal_(0.0, 1e-4)
 
     def init_sndha(self, batch_size):
         s = nn.Parameter(torch.FloatTensor(self.num_cells).normal_(0.0, self.init), requires_grad=True)
@@ -85,23 +84,21 @@ class RWA(nn.Module):
             xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
             # Gates, u, g, a
-            # u_t = self.u_drop(x_t)
             u_t = self.u(x_t)
-
-            # g_t = self.g_drop(xh_join)
             g_t = self.g(xh_join)
-
-            # a_t = self.a_drop(xh_join)
             a_t = self.a(xh_join)
+
+            decay = Funct.sigmoid(self.decay(x_t))
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_newmax = torch.max(a_max_t, a_t)  # update a_max
+            a_decay = a_max_t * torch.exp(-decay)
+            a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
@@ -129,23 +126,21 @@ class RWA(nn.Module):
             xh_join = xh_join.view(xh_join.size(0), -1)  # flatten time step h
 
             # Gates, u, g, a
-            # u_t = self.u_drop(x_t)
             u_t = self.u(x_t)
-
-            # g_t = self.g_drop(xh_join)
             g_t = self.g(xh_join)
-
-            # a_t = self.a_drop(xh_join)
             a_t = self.a(xh_join)
+
+            decay = Funct.sigmoid(self.decay(x_t))  # could probably remove sigmoid if wanted
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_newmax = torch.max(a_max_t, a_t)  # update a_max
+            a_decay = a_max_t * torch.exp(-decay)
+            a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
