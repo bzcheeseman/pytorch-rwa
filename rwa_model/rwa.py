@@ -88,17 +88,17 @@ class RWA(nn.Module):
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            decay = Funct.sigmoid(self.decay(x_t))
+            decay = Funct.tanh(self.decay(x_t))
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_decay = a_max_t * torch.exp(-decay)
+            a_decay = a_max_t * torch.exp(decay)
             a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
@@ -130,17 +130,17 @@ class RWA(nn.Module):
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            decay = Funct.sigmoid(self.decay(x_t))  # change to tanh, drop minus in exp, name to attention
+            decay = Funct.tanh(self.decay(x_t))  # change to tanh, drop minus in exp, name to attention
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_decay = a_max_t * torch.exp(-decay)
+            a_decay = a_max_t * torch.exp(decay)
             a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
