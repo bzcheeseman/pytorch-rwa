@@ -130,7 +130,7 @@ class RWA(nn.Module):
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            decay = Funct.sigmoid(self.decay(x_t))  # could probably remove sigmoid if wanted
+            decay = Funct.sigmoid(self.decay(x_t))  # change to tanh, drop minus in exp, name to attention
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
