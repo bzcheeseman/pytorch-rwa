@@ -20,12 +20,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/gpu_short_copytask_cuda_kw3")
+configure("training/gpu_short_copytask_cuda_1")
 
 num_features = 9
 num_classes = 9
-num_filters = 15
-kernel_width = 3
+num_filters = 9
+kernel_width = 1  # for copy kw = 1 works best
 num_cells = 250
 batch = 1
 # rwa = RWA(num_features, num_cells, num_classes, fwd_type="stepwise")
@@ -97,11 +97,14 @@ for epoch in range(1):
 
             running_loss = 0.0
 
-inputs, label = test[0]
-outputs = rwa(inputs, rwa.s, n, d, h, a_max)
-plt.imshow(outputs.cpu().squeeze().numpy())
-plt.imshow(label.cpu().squeeze().numpy())
-plt.show()
+test = CopyTask(5, 40)
+
+for i in range(len(test)):
+    inputs, label = test[i]
+    outputs, rwa.s, n, d, h, a_max = rwa(Variable(inputs.unsqueeze(0).cuda()), rwa.s, n, d, h, a_max)
+    plt.imshow(outputs.cpu().squeeze().numpy())
+    plt.imshow(label.cpu().squeeze().numpy())
+    plt.show()
 
 torch.save(rwa.state_dict(), "models/rwa_add.dat")
 print("Finished Training")

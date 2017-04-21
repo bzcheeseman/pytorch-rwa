@@ -75,7 +75,7 @@ class RWA(nn.Module):
         n_t = n
         d_t = d
         for x_t in torch.unbind(x, 1):  # Unbind the tensor along the time/steps dimension
-            xh_join = torch.cat([x_t, h_t], 1)  # concat the time step input with the time step h
+            xh_join = torch.cat([x_t.squeeze(1), h_t], 1)  # concat the time step input with the time step h
 
             x_t = x_t.contiguous()
             x_t = x_t.view(x_t.size(0), -1)  # flatten time step input

@@ -99,7 +99,7 @@ class CopyTask(Dataset):
         sample = []
         sample_label = []
 
-        rand_seq_len = np.random.randint(low=2, high=self.max_length)
+        rand_seq_len = np.random.randint(low=int(self.max_length-self.max_length/5), high=self.max_length)
         zeros = torch.zeros(*self.input_size)
 
         for i in range(rand_seq_len):
