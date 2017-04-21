@@ -6,7 +6,7 @@
 # Full license at pytorch-rwa/LICENSE.txt
 #
 
-from rwa_model import RWAGPU
+from rwa_model import RWAGPU, RWA
 from utils import AddTask
 
 import torch
@@ -20,15 +20,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/gpu_test_bn_7_cuda")
+configure("training/gpu_bn_lr_decay_2")
 
 num_features = 2
 num_classes = 1
-num_filters = 10  # 15 works, 10 works at lr = 0.001
+num_filters = 20  # 15 works, 10 works at lr = 0.001
                   # 10 works at lr = 0.0015, 0.002, 0.003
-                  # 15 works at lr = 0.002, little slower than the other way
+                  # 15 works at lr = 0.002, 0.003, still a little slower than linear
+                  # more filters works better pretty universally (or so it seems)
+                  # Need lr decay to make it train fast
 kernel_width = 1
-# num_cells = 250
+num_cells = 250
 batch = 100
 # rwa = RWA(num_features, num_cells, num_classes, fwd_type="cumulative")
 rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
@@ -50,10 +52,9 @@ data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 s, n, d, h, a_max = rwa.init_sndha(batch)
 rwa.register_parameter('s', s)  # make sure s changes after each optimizer step
 
-optimizer = optim.Adam(rwa.parameters(), lr=current_lr)
+optimizer = optim.Adam(rwa.parameters(), lr=current_lr)  # add weight decay?
 
 rwa.train()
-rwa.cuda()
 
 for epoch in range(5):
 
@@ -64,9 +65,9 @@ for epoch in range(5):
         labels = Variable(labels)
 
         optimizer.zero_grad()
-        outputs, rwa.s, n_new, d_new, h_new, a_newmax = rwa(inputs.cuda(), rwa.s, n.cuda(), d.cuda(), h.cuda(), a_max.cuda())
+        outputs, rwa.s, n_new, d_new, h_new, a_newmax = rwa(inputs, rwa.s, n, d, h, a_max)
 
-        loss = criterion(outputs, labels.cuda())
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
@@ -87,14 +88,14 @@ for epoch in range(5):
             log_value("Error", np.abs(outputs.data[0, 0] - labels.data[0, 0]), step=current_step)
             log_value("Output", outputs.data[0, 0], step=current_step)
 
-            # if time_since_decay >= int(0.5 * (1. / current_lr)):
-            #     if np.abs(np.mean(np.diff(accumulated_loss))) <= current_lr:
-            #         torch.save(rwa.state_dict(), "models/add.dat")
-            #         current_lr = max([current_lr * 1e-1, 1e-8])
-            #         print("lr decayed to: ", current_lr)
-            #         optimizer = optim.Adam(rwa.parameters(), lr=current_lr)
-            #         accumulated_loss.clear()
-            #         time_since_decay = 0
+            if time_since_decay >= int(0.8 * (1. / current_lr)):
+                if np.abs(np.mean(np.diff(accumulated_loss))) <= current_lr:
+                    torch.save(rwa.state_dict(), "models/add.dat")
+                    current_lr = max([current_lr * 1e-1, 1e-8])
+                    print("lr decayed to: ", current_lr)
+                    optimizer = optim.Adam(rwa.parameters(), lr=current_lr)
+                    accumulated_loss.clear()
+                    time_since_decay = 0
 
             running_loss = 0.0
 
