@@ -81,7 +81,48 @@ class AddTask(Dataset):
             return self.num_test
 
 
+class CopyTask(Dataset):
+    def __init__(self,
+                 num_train=100000,
+                 max_length=100,
+                 input_size=(1, 9)):
+
+        super(CopyTask, self).__init__()
+
+        self.num_train = num_train
+        self.max_length = max_length
+        self.input_size = input_size
+
+        self.input_tensor = torch.FloatTensor(*input_size).uniform_(0, 1)
+
+    def __getitem__(self, index):
+        sample = []
+        sample_label = []
+
+        rand_seq_len = np.random.randint(low=2, high=self.max_length)
+        zeros = torch.zeros(*self.input_size)
+
+        for i in range(rand_seq_len):
+            sample.append(torch.bernoulli(self.input_tensor))
+            sample_label.append(zeros)
+
+        sample.append(torch.ones(*zeros.size()) * 0.5)
+        sample_label.append(zeros)
+
+        for i in range(rand_seq_len):
+            sample_label.append(sample[i])
+            sample.append(zeros)
+
+        sample = torch.stack(sample).view(2 * rand_seq_len + 1, *self.input_size)
+        sample_label = torch.cat(sample_label).view(2 * rand_seq_len + 1, *self.input_size)
+
+        return sample, sample_label
+
+    def __len__(self):
+        return self.num_train
+
+
 if __name__ == "__main__":
-    add = AddTask()
+    add = CopyTask()
     x, y = add[0]
     print(x, y)

@@ -226,6 +226,8 @@ class RWAGPU(nn.Module):
 
         h = h + self.activation(s.repeat(x.size(0), 1, 1, 1))
 
+        outs = []
+
         h_t = h
         a_max_t = a_max
         n_t = n
@@ -257,7 +259,9 @@ class RWAGPU(nn.Module):
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
 
-        outs = self.o(h_t.view(h_t.size(0), -1))  # change this so it's like the other rwa impl
+            outs.append(self.o(h_t.view(h_t.size(0), -1)))
+
+        outs = torch.stack(outs, dim=1)  # need both forward types
         return outs, s, n_t, d_t, h_t, a_max_t
 
 

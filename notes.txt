@@ -1,0 +1,7 @@
+# Add Task
+
+# 15 works, 10 works at lr = 0.001
+# 10 works at lr = 0.0015, 0.002, 0.003
+# 15 works at lr = 0.002, 0.003, still a little slower than linear
+# more filters works better pretty universally (or so it seems)
+# Need lr decay to make it train fast
