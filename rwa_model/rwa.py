@@ -182,19 +182,31 @@ class RWAGPU(nn.Module):
         self.num_classes = num_classes
         self.activation = activation
         self.init = init
-        self.num_cells = (self.num_features - self.kernel_width + 1) * self.num_filters
+        self.num_cells = self.num_features * self.num_filters
 
-        self.x_resize = nn.Linear(self.num_features, self.num_cells)
+        self.x_resize = nn.Linear(self.num_features, self.num_cells, bias=False)
 
-        self.g = nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
-                           padding=(0, int(np.floor(kernel_width/2))))  # output is num_features - 3 + 1
-        self.u = nn.Conv2d(1, self.num_filters, (1, kernel_width),
-                           padding=(0, int(np.floor(kernel_width/2))))
-        self.a = nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
-                           padding=(0, int(np.floor(kernel_width/2))))
+        self.g = nn.Sequential(
+            nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
+                           padding=(0, int(np.floor(kernel_width/2)))),
+            nn.BatchNorm2d(self.num_filters)
+        )
+        self.u = nn.Sequential(
+            nn.Conv2d(1, self.num_filters, (1, kernel_width),
+                           padding=(0, int(np.floor(kernel_width/2)))),
+            nn.BatchNorm2d(self.num_filters)
+        )
+        self.a = nn.Sequential(
+            nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
+                           padding=(0, int(np.floor(kernel_width/2)))),
+            nn.BatchNorm2d(self.num_filters)
+        )
 
-        self.decay = nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
-                               padding=(0, int(np.floor(kernel_width/2))))
+        self.decay = nn.Sequential(
+            nn.Conv2d(self.num_filters+1, self.num_filters, (1, kernel_width),
+                           padding=(0, int(np.floor(kernel_width/2)))),
+            nn.BatchNorm2d(self.num_filters)
+        )
 
         o_init_factor = np.sqrt((6.0 * init) / (self.num_cells + self.num_classes))
 
@@ -203,7 +215,7 @@ class RWAGPU(nn.Module):
         self.o.bias.data.zero_()
 
     def init_sndha(self, batch_size):
-        s = nn.Parameter(torch.FloatTensor(self.num_filters, 1, self.num_cells).normal_(0.0, self.init), requires_grad=True)
+        s = nn.Parameter(torch.FloatTensor(self.num_filters, 1, self.num_cells).normal_(0.0, self.init))
         n = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_cells))
         d = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_cells))
         h = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_cells))
@@ -245,7 +257,7 @@ class RWAGPU(nn.Module):
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
 
-        outs = self.o(h_t.view(h_t.size(0), -1))
+        outs = self.o(h_t.view(h_t.size(0), -1))  # change this so it's like the other rwa impl
         return outs, s, n_t, d_t, h_t, a_max_t
 
 
