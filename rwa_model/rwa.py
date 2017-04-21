@@ -56,7 +56,7 @@ class RWA(nn.Module):
         self.o.weight.data.uniform_(-o_init_factor, o_init_factor)
         self.o.bias.data.zero_()
 
-        self.decay = nn.Linear(self.num_features, self.num_cells, bias=False)
+        self.decay = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
         self.decay.weight.data.normal_(0.0, 1e-4)
 
     def init_sndha(self, batch_size):
@@ -88,17 +88,17 @@ class RWA(nn.Module):
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            decay = Funct.tanh(self.decay(x_t))  # using xh_join here doesn't work - get a loss of nan!
+            decay = Funct.sigmoid(self.decay(xh_join))  # this at least works now
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_decay = a_max_t * torch.exp(decay)
+            a_decay = a_max_t * torch.exp(-decay)
             a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * torch.exp(decay) * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * torch.exp(decay) * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
@@ -130,17 +130,17 @@ class RWA(nn.Module):
             g_t = self.g(xh_join)
             a_t = self.a(xh_join)
 
-            decay = Funct.tanh(self.decay(x_t))  # xh_join doesn't work here at all
+            decay = Funct.sigmoid(self.decay(xh_join))
 
             z_t = u_t * Funct.tanh(g_t)  # pointwise multiply
 
-            a_decay = a_max_t * torch.exp(decay)
+            a_decay = a_max_t * torch.exp(-decay)
             a_newmax = torch.max(a_decay, a_t)  # update a_max
             exp_diff = torch.exp(a_max_t - a_newmax)
             exp_scaled = torch.exp(a_t - a_newmax)
 
-            n_t = n_t * torch.exp(decay) * exp_diff + z_t * exp_scaled  # update numerator
-            d_t = d_t * torch.exp(decay) * exp_diff + exp_scaled  # update denominator
+            n_t = n_t * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
+            d_t = d_t * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
 
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max

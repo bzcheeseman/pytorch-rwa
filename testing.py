@@ -20,11 +20,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/gpu_bn_lr_decay_2")
+configure("training/gpu_longer_sequence")
 
 num_features = 2
 num_classes = 1
-num_filters = 20  # 15 works, 10 works at lr = 0.001
+num_filters = 15  # 15 works, 10 works at lr = 0.001
                   # 10 works at lr = 0.0015, 0.002, 0.003
                   # 15 works at lr = 0.002, 0.003, still a little slower than linear
                   # more filters works better pretty universally (or so it seems)
@@ -45,7 +45,7 @@ running_loss = 0.0
 time_since_decay = 0
 accumulated_loss = []
 
-test = AddTask(100000, 10000, 100)
+test = AddTask(100000, 10000, 200)
 
 data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 
