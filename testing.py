@@ -20,10 +20,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/newgpu_cell_batch_20")
+configure("training/oldgpu_0")
 num_features = 2
 num_classes = 1
-num_filters = 150
+num_filters = 9
 kernel_width = 1
 num_cells = 250
 batch = 50
@@ -105,7 +105,7 @@ test = AddTask(5, 40)
 for i in range(len(test)):
     inputs, label = test[i]
     outputs, rwa.s, n, d, h, a_max = \
-        rwa(Variable(inputs.unsqueeze(0).cuda()), rwa.s, n.cuda(), d.cuda(), h.cuda(), a_max.cuda())
+        rwa(Variable(inputs.cuda()), rwa.s, n.cuda(), d.cuda(), h.cuda(), a_max.cuda())
     plt.imshow(outputs.cpu().squeeze().data.numpy())
     plt.show()
     plt.imshow(label.cpu().squeeze().numpy())

@@ -154,14 +154,14 @@ class RWA(nn.Module):
 
     def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
 
-        h_t = h + self.activation(s.repeat(x.size(0), 1))
+        h_t = h + self.activation(s)
 
         outs, n_t, d_t, h_t, a_newmax = self.fwd_fn(x, n, d, h_t, a_max)
 
         return outs, s, n_t, d_t, h_t, a_newmax
 
 
-class RWAGPUCell(nn.Module):  # doesn't totally work yet
+class RWAGPUCell(nn.Module):  # doesn't totally work yet, use CGRU?
     def __init__(self,
                  num_features,
                  time_steps,
@@ -317,9 +317,9 @@ class RWAGPU(nn.Module):
 
     def forward(self, x, s, n, d, h, a_max):
 
-        h = h + self.activation(s.repeat(x.size(0), 1, 1, 1))
+        h = h + self.activation(s)
 
-        outs = []
+        # outs = []
 
         h_t = h
         a_max_t = a_max
@@ -352,9 +352,10 @@ class RWAGPU(nn.Module):
             h_t = self.activation((n_t / d_t))  # update h
             a_max_t = a_newmax  # update a_max
 
-            outs.append(self.o(h_t.view(h_t.size(0), -1)))
+            # outs.append(self.o(h_t.view(h_t.size(0), -1)))
 
-        outs = torch.stack(outs, dim=1)  # need both forward types
+        # outs = torch.stack(outs, dim=1)  # need both forward types
+        outs = self.o(h_t.view(h_t.size(0), -1))
         return outs, s, n_t, d_t, h_t, a_max_t
 
 
