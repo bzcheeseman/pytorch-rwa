@@ -8,4 +8,4 @@
 
 __all__ = ['rwa']
 
-from .rwa import RWA, RWAGPU
+from .rwa import RWA, RWACell, RWAGPU, RWAGPUCell

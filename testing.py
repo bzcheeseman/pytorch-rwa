@@ -6,7 +6,7 @@
 # Full license at pytorch-rwa/LICENSE.txt
 #
 
-from rwa_model import RWAGPU, RWA
+from model import RWAGPU, RWA, RWAGPUCell
 from utils import AddTask, CopyTask
 
 import torch
@@ -20,40 +20,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/gpu_short_copytask_cuda_1")
-
-num_features = 9
-num_classes = 9
-num_filters = 9
-kernel_width = 1  # for copy kw = 1 works best
+configure("training/newgpu_cell_batch_20")
+num_features = 2
+num_classes = 1
+num_filters = 150
+kernel_width = 1
 num_cells = 250
-batch = 1
-# rwa = RWA(num_features, num_cells, num_classes, fwd_type="stepwise")
+batch = 50
+# rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
 rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
+# rwa = RWAGPUCell(num_features, 100, num_filters, num_classes, decay=True)
 
 criterion = nn.MSELoss()
 
-print_steps = 5
+print_steps = 10
 
-current_lr = 0.001
+current_lr = 0.002
 
 running_loss = 0.0
 time_since_decay = 0
 accumulated_loss = []
 
-test = CopyTask(20000, 20)
+test = AddTask(100000, 10000, 100)
 
 data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 
 s, n, d, h, a_max = rwa.init_sndha(batch)
 rwa.register_parameter('s', s)  # make sure s changes after each optimizer step
+# rwa.load_state_dict(torch.load("models/rwa_add.dat"))
 
 optimizer = optim.Adam(rwa.parameters(), lr=current_lr)  # add weight decay?
 
 rwa.train()
 rwa.cuda()
 
-for epoch in range(1):
+for epoch in range(5):
 
     for i, data in enumerate(data_loader, 0):
 
@@ -64,6 +65,9 @@ for epoch in range(1):
         optimizer.zero_grad()
         outputs, rwa.s, n_new, d_new, h_new, a_newmax = \
             rwa(inputs, rwa.s, n.cuda(async=True), d.cuda(async=True), h.cuda(async=True), a_max.cuda(async=True))
+
+        # outputs, n_new, d_new, h_new, a_newmax = \
+        #     rwa(inputs, n.cuda(async=True), d.cuda(async=True), h.cuda(async=True), a_max.cuda(async=True))
 
         loss = criterion(outputs, labels)
         loss.backward()
@@ -82,9 +86,8 @@ for epoch in range(1):
             current_step = i + 1 + len(data_loader) * epoch
             print("Current step: ", current_step, "Loss: ", running_loss / print_steps)
             log_value("Loss", running_loss / print_steps, step=current_step)
-            #             log_value("LR", current_lr, step=current_step)
-            # log_value("Error", np.abs(outputs.data[0, 0] - labels.data[0, 0]), step=current_step)
-            # log_value("Output", outputs.data[0, 0], step=current_step)
+            log_value("Outputs", outputs.cpu().data.numpy()[0], step=current_step)
+            log_value("Error", (outputs - labels).cpu().data.numpy()[0], step=current_step)
 
             # if time_since_decay >= int(0.8 * (1. / current_lr)):
             #     if np.abs(np.mean(np.diff(accumulated_loss))) <= current_lr:
@@ -97,12 +100,14 @@ for epoch in range(1):
 
             running_loss = 0.0
 
-test = CopyTask(5, 40)
+test = AddTask(5, 40)
 
 for i in range(len(test)):
     inputs, label = test[i]
-    outputs, rwa.s, n, d, h, a_max = rwa(Variable(inputs.unsqueeze(0).cuda()), rwa.s, n, d, h, a_max)
-    plt.imshow(outputs.cpu().squeeze().numpy())
+    outputs, rwa.s, n, d, h, a_max = \
+        rwa(Variable(inputs.unsqueeze(0).cuda()), rwa.s, n.cuda(), d.cuda(), h.cuda(), a_max.cuda())
+    plt.imshow(outputs.cpu().squeeze().data.numpy())
+    plt.show()
     plt.imshow(label.cpu().squeeze().numpy())
     plt.show()
 
