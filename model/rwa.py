@@ -161,45 +161,42 @@ class RWA(nn.Module):
         return outs, s, n_t, d_t, h_t, a_newmax
 
 
-class RWAGPUCell(nn.Module):  # doesn't totally work yet, use CGRU?
+class RWACGRU(nn.Module):  # need to clean up this code
     def __init__(self,
                  num_features,
                  time_steps,
                  num_filters,
                  num_classes,
-                 decay=True,
                  init=1.0,
                  activation=Funct.tanh,
                  output_type='cumulative'):
-        super(RWAGPUCell, self).__init__()
+        super(RWACGRU, self).__init__()
 
         self.num_features = num_features
         self.time_steps = time_steps
         self.num_filters = num_filters
         self.init = init
         self.activation = activation
-        self.decay = decay
 
         # Neural GPU that can take input at every time step and output at every time step
-        self.g = nn.Sequential(
-            nn.Conv2d(time_steps + num_filters, num_filters, (1, 3), padding=(0, 1)),
-            nn.BatchNorm2d(num_filters)
+        # Use conv groups here, 1x1 convolution to get time info from sequence, and then run grouped conv
+        # over the result to extract other info from that (see Xception https://arxiv.org/pdf/1610.02357.pdf)
+        self.i = nn.Sequential(
+            nn.Conv2d(time_steps+num_filters, num_filters, (1, 1))
         )
 
-        self.u = nn.Sequential(
-            nn.Conv2d(time_steps, num_filters, (1, 1)),
+        self.g = nn.Sequential(
+            nn.Conv2d(num_filters, num_filters, (1, 3), padding=(0, 1), groups=int(num_filters/1)),
             nn.BatchNorm2d(num_filters)
         )
 
         self.a = nn.Sequential(
-            nn.Conv2d(time_steps + num_filters, num_filters, (1, 5), padding=(0, 2)),
+            nn.Conv2d(num_filters, num_filters, (1, 5), padding=(0, 2), groups=int(num_filters/1)),
             nn.BatchNorm2d(num_filters)
         )
 
-        self.decay = nn.Sequential(
-            nn.Conv2d(time_steps + num_filters, num_filters, (1, 7), padding=(0, 3)),
-            nn.BatchNorm2d(num_filters),
-            nn.Sigmoid()
+        self.ga = nn.Sequential(
+            nn.Conv2d(num_filters, num_filters, (1, 1), groups=num_classes)  # this groups parameter could change
         )
 
         self.o = nn.Sequential(
@@ -208,12 +205,12 @@ class RWAGPUCell(nn.Module):  # doesn't totally work yet, use CGRU?
         )
 
     def init_sndha(self, batch_size):
-        s = nn.Parameter(torch.FloatTensor(batch_size, self.num_filters, 1, self.num_features).normal_(0.0, self.init))
-        n = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_features))
-        d = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_features))
-        h = Variable(torch.zeros(batch_size, self.num_filters, 1, self.num_features))
-        a_max = Variable(torch.FloatTensor(batch_size, self.num_filters, 1, self.num_features).fill_(-1e38))
-        return s, n, d, h, a_max
+        s = nn.Parameter(torch.FloatTensor([0]))
+        n = Variable(torch.FloatTensor([0]))
+        d = Variable(torch.FloatTensor([0]))
+        h = Variable(torch.rand(batch_size, self.num_filters, 1, self.num_features))
+        a = Variable(torch.FloatTensor([0]))
+        return s, n, d, h, a
 
     def forward(self, x, s, n, d, h, a_max):
 
@@ -221,31 +218,13 @@ class RWAGPUCell(nn.Module):  # doesn't totally work yet, use CGRU?
 
         xh_join = torch.cat([x, h], 1)
 
-        g_t = self.g(xh_join)
-        u_t = self.u(x)
-        a_t = self.a(xh_join)
+        i_t = self.i(xh_join)
 
-        z_t = u_t * Funct.tanh(g_t)
+        g_t = Funct.sigmoid(self.g(i_t))
+        a_t = Funct.sigmoid(self.a(i_t))
 
-        if self.decay:
-            decay = self.decay(xh_join)
-            a_decay = a_max * torch.exp(-decay)
-            a_newmax = torch.max(a_decay, a_t)  # update a_max
-            exp_diff = torch.exp(a_max - a_newmax)
-            exp_scaled = torch.exp(a_t - a_newmax)
+        h = g_t * i_t + (1.0 - g_t) * Funct.tanh(self.ga(i_t * a_t))
 
-            n = n * torch.exp(-decay) * exp_diff + z_t * exp_scaled  # update numerator
-            d = d * torch.exp(-decay) * exp_diff + exp_scaled  # update denominator
-        else:
-            a_newmax = torch.max(a_max, a_t)  # update a_max
-            exp_diff = torch.exp(a_max - a_newmax)
-            exp_scaled = torch.exp(a_t - a_newmax)
-
-            n = n * exp_diff + z_t * exp_scaled  # update numerator
-            d = d * exp_diff + exp_scaled  # update denominator
-
-        h = self.activation((n / d))  # update h
-        a_max = a_newmax  # update a_max
         outs = self.o(h)
 
         return outs, s, n, d, h, a_max
