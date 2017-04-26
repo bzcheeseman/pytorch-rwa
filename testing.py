@@ -30,6 +30,7 @@ batch = 50
 # rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
 # rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
 rwa = CGRURWA(num_features, 100, num_filters, num_classes)
+rwa.cuda()
 
 criterion = nn.MSELoss()
 
@@ -45,14 +46,13 @@ test = AddTask(100000, 10000, 100)
 
 data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 
-s, n, d, h, a_max = rwa.init_sndha(batch)
-rwa.register_parameter('s', s)  # make sure s changes after each optimizer step
+hidden = rwa.init_hidden(batch)
 # rwa.load_state_dict(torch.load("models/rwa_add.dat"))
 
 optimizer = optim.Adam(rwa.parameters(), lr=current_lr)  # add weight decay?
 
 rwa.train()
-rwa.cuda()
+
 
 for epoch in range(5):
 
@@ -63,20 +63,13 @@ for epoch in range(5):
         labels = Variable(labels).cuda(async=True)
 
         optimizer.zero_grad()
-        outputs, rwa.s, n_new, d_new, h_new, a_newmax = \
-            rwa(inputs, rwa.s, n.cuda(async=True), d.cuda(async=True), h.cuda(async=True), a_max.cuda(async=True))
-
-        # outputs, n_new, d_new, h_new, a_newmax = \
-        #     rwa(inputs, n.cuda(async=True), d.cuda(async=True), h.cuda(async=True), a_max.cuda(async=True))
+        outputs, hidden = rwa(inputs, hidden)
 
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
-        n = Variable(n_new.data)
-        d = Variable(d_new.data)
-        h = Variable(h_new.data)
-        a_max = Variable(a_newmax.data)
+        hidden = rwa.detach_hidden(hidden)
 
         running_loss += loss.data[0]
         accumulated_loss.append(loss.data[0])

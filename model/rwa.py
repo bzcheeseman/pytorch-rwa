@@ -28,6 +28,8 @@ class RWACell(nn.Module):
         self.decay = decay
         self.init = init
 
+        self._gpu = False
+
         #### g, a, and u gates initialization #####
         ga_init_factor = np.sqrt((6.0 * init) / (num_features + 2.0 * num_cells))
         u_init_factor = np.sqrt((6.0 * init) / (num_features + num_cells))
@@ -47,12 +49,20 @@ class RWACell(nn.Module):
         self.decay = nn.Linear(self.num_features + self.num_cells, self.num_cells, bias=False)
         self.decay.weight.data.uniform_(-ga_init_factor, ga_init_factor)
 
+    def cuda(self, device_id=None):
+        self._gpu = True
+        super(RWACell, self).cuda(device_id)
+
     def init_hidden(self, batch_size):
-        s = nn.Parameter(torch.FloatTensor(batch_size, self.num_cells).normal_(0.0, self.init), requires_grad=True)
-        n = Variable(torch.zeros(batch_size, self.num_cells))
-        d = Variable(torch.zeros(batch_size, self.num_cells))
-        h = Variable(torch.zeros(batch_size, self.num_cells))
-        a_max = Variable(torch.FloatTensor(batch_size, self.num_cells).fill_(-1e38))
+        typ = torch.FloatTensor
+        if self._gpu:
+            typ = torch.cuda.FloatTensor
+        s = nn.Parameter(typ(batch_size, self.num_cells).normal_(0.0, self.init), requires_grad=True)
+        self.register_parameter('s', s)
+        n = Variable(typ(batch_size, self.num_cells).zero_())
+        d = Variable(typ(batch_size, self.num_cells).zero_())
+        h = Variable(typ(batch_size, self.num_cells).zero_())
+        a_max = Variable(typ(batch_size, self.num_cells).fill_(-1e38))
         return s, n, d, h, a_max
 
     # expects input of size (batch x 1 x num_features) - already split along time steps
@@ -121,7 +131,7 @@ class RWA(nn.Module):
         self.o.weight.data.uniform_(-o_init_factor, o_init_factor)
         self.o.bias.data.zero_()
 
-    def init_sndha(self, batch_size):
+    def init_hidden(self, batch_size):
         return self.rwacell.init_hidden(batch_size)
 
     def _fwd_stepwise(self, x, n, d, h, a_max):
@@ -152,13 +162,26 @@ class RWA(nn.Module):
         outs = self.o(h_t)
         return outs, n_t, d_t, h_t, a_max_t
 
-    def forward(self, x, s, n, d, h, a_max):  # x has shape (batch x steps x num_features)
+    def forward(self, x, hidden):  # x has shape (batch x steps x num_features)
+
+        s = hidden[0]
+        n = hidden[1]
+        d = hidden[2]
+        h = hidden[3]
+        a_max = hidden[4]
 
         h_t = h + self.activation(s)
 
         outs, n_t, d_t, h_t, a_newmax = self.fwd_fn(x, n, d, h_t, a_max)
 
         return outs, s, n_t, d_t, h_t, a_newmax
+
+    def detach_hidden(self, hidden):
+        n = Variable(hidden[1].data)
+        d = Variable(hidden[2].data)
+        h = Variable(hidden[3].data)
+        a_max = Variable(hidden[4].data)
+        return n, d, h, a_max
 
 
 class CGRURWACell(nn.Module):
@@ -173,6 +196,8 @@ class CGRURWACell(nn.Module):
         self.num_features = num_features
         self.time_steps = time_steps
         self.num_filters = num_filters
+
+        self._gpu = False
 
         # Neural GPU that can take input at every time step and output at every time step
         # Use conv groups here, 1x1 convolution to get time info from sequence, and then run grouped conv
@@ -195,8 +220,17 @@ class CGRURWACell(nn.Module):
             nn.Conv2d(num_filters, num_filters, (1, 1), groups=num_classes)  # this groups parameter (c/sh)ould change
         )
 
+    def cuda(self, device_id=None):
+        self._gpu = True
+        super(CGRURWACell, self).cuda(device_id)
+
     def init_hidden(self, batch_size):
-        h = Variable(torch.rand(batch_size, self.num_filters, 1, self.num_features))
+        typ = torch.FloatTensor
+        if self._gpu:
+            typ = torch.cuda.FloatTensor
+
+        h = Variable(typ(batch_size, self.num_filters, 1, self.num_features).uniform_())
+
         return h
 
     def forward(self, x, h):
@@ -218,16 +252,12 @@ class CGRURWA(nn.Module):  # need to clean up this code
                  time_steps,
                  num_filters,
                  num_classes,
-                 init=1.0,
-                 activation=Funct.tanh,
                  output_type='cumulative'):
         super(CGRURWA, self).__init__()
 
         self.num_features = num_features
         self.time_steps = time_steps
         self.num_filters = num_filters
-        self.init = init
-        self.activation = activation
 
         self.cell = CGRURWACell(num_features, time_steps, num_filters, num_classes)
 
@@ -236,15 +266,15 @@ class CGRURWA(nn.Module):  # need to clean up this code
             nn.MaxPool2d((1, num_features), stride=(1, 1))
         )
 
-    def init_sndha(self, batch_size):
-        s = nn.Parameter(torch.FloatTensor([0]))
-        n = Variable(torch.FloatTensor([0]))
-        d = Variable(torch.FloatTensor([0]))
-        h = self.cell.init_hidden(batch_size)
-        a = Variable(torch.FloatTensor([0]))
-        return s, n, d, h, a
+    def cuda(self, device_id=None):
+        self.cell._gpu = True
+        super(CGRURWA, self).cuda(device_id)
 
-    def forward(self, x, s, n, d, h, a_max):
+    def init_hidden(self, batch_size):
+        h = self.cell.init_hidden(batch_size)
+        return h
+
+    def forward(self, x, h):
 
         if x.dim() != 4:
             x = x.unsqueeze(2)
@@ -257,9 +287,14 @@ class CGRURWA(nn.Module):  # need to clean up this code
 
         outs = self.o(h)
 
-        return outs, s, n, d, h, a_max
+        return outs, h
+
+    def detach_hidden(self, h):
+        h = Variable(h.data)
+        return h
 
 
+# Deprecated
 class RWAGPU(nn.Module):
     def __init__(self,
                  num_features,
