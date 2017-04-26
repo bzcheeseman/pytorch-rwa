@@ -242,7 +242,7 @@ class CGRURWACell(nn.Module):
 
         i_t = self.i(xh_join)
 
-        g_t = Funct.sigmoid(self.g(i_t))
+        g_t = Funct.sigmoid(self.g(i_t))  # Try getting rid of sigmoid here?
         a_t = Funct.sigmoid(self.a(i_t))
 
         h = g_t * i_t + (1.0 - g_t) * Funct.tanh(self.ga(i_t * a_t))
