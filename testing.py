@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/cgru_10")
+configure("training/cgru_11")
 num_features = 2
 num_classes = 1
 num_filters = 100  # looks like you want this ~ length of sequence
@@ -29,7 +29,8 @@ num_cells = 250
 batch = 50
 # rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
 # rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
-rwa = CGRURWA(num_features, 100, num_filters, num_classes)
+rwa = CGRURWA(num_features, 5, num_filters, num_classes)
+# this is slower if time_steps is much smaller than the sequence
 rwa.cuda()
 
 criterion = nn.MSELoss()

@@ -123,7 +123,7 @@ class RWA(nn.Module):
         self.activation = activation
         self.num_cells = num_cells
 
-        self.rwacell = RWACell(num_features, num_cells, decay, init, activation)
+        self.cell = RWACell(num_features, num_cells, decay, init, activation)
 
         o_init_factor = np.sqrt((6.0 * init) / (num_cells + num_classes))
 
@@ -131,8 +131,12 @@ class RWA(nn.Module):
         self.o.weight.data.uniform_(-o_init_factor, o_init_factor)
         self.o.bias.data.zero_()
 
+    def cuda(self, device_id=None):
+        self.cell._gpu = True
+        super(RWA, self).cuda(device_id)
+
     def init_hidden(self, batch_size):
-        return self.rwacell.init_hidden(batch_size)
+        return self.cell.init_hidden(batch_size)
 
     def _fwd_stepwise(self, x, n, d, h, a_max):
         outs = []
@@ -142,7 +146,7 @@ class RWA(nn.Module):
         n_t = n
         d_t = d
         for x_t in torch.unbind(x, 1):
-            n_t, d_t, h_t, a_max_t = self.rwacell(x_t, n_t, d_t, h_t, a_max_t)
+            n_t, d_t, h_t, a_max_t = self.cell(x_t, n_t, d_t, h_t, a_max_t)
 
             o_t = self.o(h_t)
             outs.append(o_t)
@@ -157,7 +161,7 @@ class RWA(nn.Module):
         n_t = n
         d_t = d
         for x_t in torch.unbind(x, 1):
-            n_t, d_t, h_t, a_max_t = self.rwacell(x_t, n_t, d_t, h_t, a_max_t)
+            n_t, d_t, h_t, a_max_t = self.cell(x_t, n_t, d_t, h_t, a_max_t)
 
         outs = self.o(h_t)
         return outs, n_t, d_t, h_t, a_max_t
@@ -174,14 +178,14 @@ class RWA(nn.Module):
 
         outs, n_t, d_t, h_t, a_newmax = self.fwd_fn(x, n, d, h_t, a_max)
 
-        return outs, s, n_t, d_t, h_t, a_newmax
+        return outs, (s, n_t, d_t, h_t, a_newmax)
 
     def detach_hidden(self, hidden):
         n = Variable(hidden[1].data)
         d = Variable(hidden[2].data)
         h = Variable(hidden[3].data)
         a_max = Variable(hidden[4].data)
-        return n, d, h, a_max
+        return (hidden[0], n, d, h, a_max)
 
 
 class CGRURWACell(nn.Module):
