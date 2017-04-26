@@ -161,7 +161,58 @@ class RWA(nn.Module):
         return outs, s, n_t, d_t, h_t, a_newmax
 
 
-class RWACGRU(nn.Module):  # need to clean up this code
+class CGRURWACell(nn.Module):
+    def __init__(self,
+                 num_features,
+                 time_steps,
+                 num_filters,
+                 num_classes):
+
+        super(CGRURWACell, self).__init__()
+
+        self.num_features = num_features
+        self.time_steps = time_steps
+        self.num_filters = num_filters
+
+        # Neural GPU that can take input at every time step and output at every time step
+        # Use conv groups here, 1x1 convolution to get time info from sequence, and then run grouped conv
+        # over the result to extract other info from that (see Xception https://arxiv.org/pdf/1610.02357.pdf)
+        self.i = nn.Sequential(
+            nn.Conv2d(time_steps + num_filters, num_filters, (1, 1))
+        )
+
+        self.g = nn.Sequential(
+            nn.Conv2d(num_filters, num_filters, (1, 3), padding=(0, 1), groups=int(num_filters / 1)),
+            nn.BatchNorm2d(num_filters)
+        )
+
+        self.a = nn.Sequential(
+            nn.Conv2d(num_filters, num_filters, (1, 5), padding=(0, 2), groups=int(num_filters / 1)),
+            nn.BatchNorm2d(num_filters)
+        )
+
+        self.ga = nn.Sequential(
+            nn.Conv2d(num_filters, num_filters, (1, 1), groups=num_classes)  # this groups parameter (c/sh)ould change
+        )
+
+    def init_hidden(self, batch_size):
+        h = Variable(torch.rand(batch_size, self.num_filters, 1, self.num_features))
+        return h
+
+    def forward(self, x, h):
+        xh_join = torch.cat([x, h], 1)
+
+        i_t = self.i(xh_join)
+
+        g_t = Funct.sigmoid(self.g(i_t))
+        a_t = Funct.sigmoid(self.a(i_t))
+
+        h = g_t * i_t + (1.0 - g_t) * Funct.tanh(self.ga(i_t * a_t))
+
+        return h
+
+
+class CGRURWA(nn.Module):  # need to clean up this code
     def __init__(self,
                  num_features,
                  time_steps,
@@ -170,7 +221,7 @@ class RWACGRU(nn.Module):  # need to clean up this code
                  init=1.0,
                  activation=Funct.tanh,
                  output_type='cumulative'):
-        super(RWACGRU, self).__init__()
+        super(CGRURWA, self).__init__()
 
         self.num_features = num_features
         self.time_steps = time_steps
@@ -178,26 +229,7 @@ class RWACGRU(nn.Module):  # need to clean up this code
         self.init = init
         self.activation = activation
 
-        # Neural GPU that can take input at every time step and output at every time step
-        # Use conv groups here, 1x1 convolution to get time info from sequence, and then run grouped conv
-        # over the result to extract other info from that (see Xception https://arxiv.org/pdf/1610.02357.pdf)
-        self.i = nn.Sequential(
-            nn.Conv2d(time_steps+num_filters, num_filters, (1, 1))
-        )
-
-        self.g = nn.Sequential(
-            nn.Conv2d(num_filters, num_filters, (1, 3), padding=(0, 1), groups=int(num_filters/1)),
-            nn.BatchNorm2d(num_filters)
-        )
-
-        self.a = nn.Sequential(
-            nn.Conv2d(num_filters, num_filters, (1, 5), padding=(0, 2), groups=int(num_filters/1)),
-            nn.BatchNorm2d(num_filters)
-        )
-
-        self.ga = nn.Sequential(
-            nn.Conv2d(num_filters, num_filters, (1, 1), groups=num_classes)  # this groups parameter could change
-        )
+        self.cell = CGRURWACell(num_features, time_steps, num_filters, num_classes)
 
         self.o = nn.Sequential(
             nn.Conv2d(num_filters, num_classes * (1 if output_type == 'cumulative' else time_steps), (1, 1)),
@@ -208,22 +240,20 @@ class RWACGRU(nn.Module):  # need to clean up this code
         s = nn.Parameter(torch.FloatTensor([0]))
         n = Variable(torch.FloatTensor([0]))
         d = Variable(torch.FloatTensor([0]))
-        h = Variable(torch.rand(batch_size, self.num_filters, 1, self.num_features))
+        h = self.cell.init_hidden(batch_size)
         a = Variable(torch.FloatTensor([0]))
         return s, n, d, h, a
 
     def forward(self, x, s, n, d, h, a_max):
 
-        x = x.unsqueeze(2)
+        if x.dim() != 4:
+            x = x.unsqueeze(2)
 
-        xh_join = torch.cat([x, h], 1)
-
-        i_t = self.i(xh_join)
-
-        g_t = Funct.sigmoid(self.g(i_t))
-        a_t = Funct.sigmoid(self.a(i_t))
-
-        h = g_t * i_t + (1.0 - g_t) * Funct.tanh(self.ga(i_t * a_t))
+        if self.time_steps == x.size(1):
+            h = self.cell(x, h)
+        else:
+            for i in range(int(x.size(1)/self.time_steps)):
+                h = self.cell(x[:, i*self.time_steps:(i+1)*self.time_steps, :, :], h)
 
         outs = self.o(h)
 

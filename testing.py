@@ -6,7 +6,7 @@
 # Full license at pytorch-rwa/LICENSE.txt
 #
 
-from model import RWAGPU, RWA, RWACGRU
+from model import RWAGPU, RWA, CGRURWA
 from utils import AddTask, CopyTask
 
 import torch
@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorboard_logger import configure, log_value
 
-configure("training/cgru_6")
+configure("training/cgru_10")
 num_features = 2
 num_classes = 1
 num_filters = 100  # looks like you want this ~ length of sequence
@@ -29,7 +29,7 @@ num_cells = 250
 batch = 50
 # rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
 # rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
-rwa = RWACGRU(num_features, 100, num_filters, num_classes)
+rwa = CGRURWA(num_features, 100, num_filters, num_classes)
 
 criterion = nn.MSELoss()
 
