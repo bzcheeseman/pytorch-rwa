@@ -17,3 +17,5 @@ Notes:
 1. The new CGRURWACell is interesting because even if we process one whole sequence at a time it will pass information from sequence to sequence
 
     1.1. If we process only one step of a sequence at a time then the hidden state acts like it would in a normal RNN
+    
+    1.2. Do we want to even keep the Variables constituted for the hidden states and backprop across sequences? This might work for some small time but I'm worried that it'll just get to be a chain that's way too long...
