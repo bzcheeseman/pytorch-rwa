@@ -15,4 +15,5 @@ TODO:
 
 Notes:
 1. The new CGRURWACell is interesting because even if we process one whole sequence at a time it will pass information from sequence to sequence
+
     1.1. If we process only one step of a sequence at a time then the hidden state acts like it would in a normal RNN
