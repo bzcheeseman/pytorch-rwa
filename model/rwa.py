@@ -132,7 +132,7 @@ class RWA(nn.Module):
         self.o.bias.data.zero_()
 
     def cuda(self, device_id=None):
-        self.cell._gpu = True
+        self.cell.cuda(device_id)
         super(RWA, self).cuda(device_id)
 
     def init_hidden(self, batch_size):
@@ -272,7 +272,7 @@ class CGRURWA(nn.Module):  # need to clean up this code
         )
 
     def cuda(self, device_id=None):
-        self.cell._gpu = True
+        self.cell.cuda(device_id)
         super(CGRURWA, self).cuda(device_id)
 
     def init_hidden(self, batch_size):
