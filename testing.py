@@ -28,8 +28,7 @@ kernel_width = 1
 num_cells = 250
 batch = 50
 # rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
-# rwa = RWAGPU(num_features, kernel_width, num_filters, num_classes)
-rwa = CGRURWA(num_features, 5, num_filters, num_classes)
+rwa = CGRURWA(num_features, 50, num_filters, num_classes)
 # this is slower if time_steps is much smaller than the sequence
 rwa.cuda()
 
@@ -48,12 +47,11 @@ test = AddTask(100000, 10000, 100)
 data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 
 hidden = rwa.init_hidden(batch)
-# rwa.load_state_dict(torch.load("models/rwa_add.dat"))
+rwa.load_state_dict(torch.load("models/rwa_add.dat"))
 
 optimizer = optim.Adam(rwa.parameters(), lr=current_lr)  # add weight decay?
 
 rwa.train()
-
 
 for epoch in range(5):
 
@@ -94,16 +92,20 @@ for epoch in range(5):
 
             running_loss = 0.0
 
-test = AddTask(5, 40)
-
-for i in range(len(test)):
-    inputs, label = test[i]
-    outputs, rwa.s, n, d, h, a_max = \
-        rwa(Variable(inputs.cuda()), rwa.s, n.cuda(), d.cuda(), h.cuda(), a_max.cuda())
-    plt.imshow(outputs.cpu().squeeze().data.numpy())
-    plt.show()
-    plt.imshow(label.cpu().squeeze().numpy())
-    plt.show()
-
 torch.save(rwa.state_dict(), "models/rwa_add.dat")
 print("Finished Training")
+
+test = AddTask(50, 200)
+testloader = DataLoader(test, batch_size=batch)
+
+for i, data in enumerate(testloader, 0):
+    inputs, label = data
+    outputs, hidden = rwa(Variable(inputs.cuda()), hidden)
+    print(criterion(outputs, Variable(label).cuda()))
+    # print(label - outputs.cpu().data)
+    # plt.imshow(outputs.cpu().squeeze().data.numpy())
+    # plt.show()
+    # plt.imshow(label.cpu().squeeze().numpy())
+    # plt.show()
+
+

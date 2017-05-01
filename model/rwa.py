@@ -180,7 +180,8 @@ class RWA(nn.Module):
 
         return outs, (s, n_t, d_t, h_t, a_newmax)
 
-    def detach_hidden(self, hidden):
+    @staticmethod
+    def detach_hidden(hidden):
         n = Variable(hidden[1].data)
         d = Variable(hidden[2].data)
         h = Variable(hidden[3].data)
@@ -242,8 +243,8 @@ class CGRURWACell(nn.Module):
 
         i_t = self.i(xh_join)
 
-        g_t = Funct.sigmoid(self.g(i_t))
-        a_t = Funct.sigmoid(self.a(i_t))
+        g_t = Funct.sigmoid(self.g(i_t))  # no sigmoid works well here, but I think it's better to leave this one
+        a_t = self.a(i_t)
 
         h = g_t * i_t + (1.0 - g_t) * Funct.tanh(self.ga(i_t * a_t))
 
@@ -293,7 +294,8 @@ class CGRURWA(nn.Module):  # need to clean up this code
 
         return outs, h
 
-    def detach_hidden(self, h):
+    @staticmethod
+    def detach_hidden(h):
         h = Variable(h.data)
         return h
 
