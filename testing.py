@@ -23,13 +23,14 @@ from tensorboard_logger import configure, log_value
 configure("training/cgru_11")
 num_features = 2
 num_classes = 1
-num_filters = 100  # looks like you want this ~ length of sequence
+num_filters = 250
 kernel_width = 1
 num_cells = 250
-batch = 50
+batch = 100
 # rwa = RWA(num_features, num_cells, num_classes, decay=True, fwd_type="cumulative")
-rwa = CGRURWA(num_features, 50, num_filters, num_classes)
-# this is slower if time_steps is much smaller than the sequence
+rwa = CGRURWA(num_features, 10, num_filters, num_classes)
+# this seems slower if time_steps is much smaller than the sequence
+# it also learns the 1000 add task pretty fast, step ~1600, 100 add task in ~450 steps
 rwa.cuda()
 
 criterion = nn.MSELoss()
@@ -47,7 +48,7 @@ test = AddTask(100000, 10000, 100)
 data_loader = DataLoader(test, batch_size=batch, shuffle=True, num_workers=4)
 
 hidden = rwa.init_hidden(batch)
-rwa.load_state_dict(torch.load("models/rwa_add.dat"))
+# rwa.load_state_dict(torch.load("models/rwa_add.dat"))
 
 optimizer = optim.Adam(rwa.parameters(), lr=current_lr)  # add weight decay?
 
